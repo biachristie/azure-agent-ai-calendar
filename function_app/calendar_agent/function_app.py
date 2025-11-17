@@ -137,7 +137,7 @@ def handle_oauth2init(req: func.HttpRequest) -> func.HttpResponse:
             f.write(credentials_json_str)
     except Exception as e:
         logging.error(f"Failes to write credentials.json file: {e}")
-        return func.HttpResponse("FATAL: Failed to write credentials.json file.", stautus_code=500)
+        return func.HttpResponse("FATAL: Failed to write credentials.json file.", status_code=500)
 
     callback = f"https://{host}/api/oauth2callback"
 
