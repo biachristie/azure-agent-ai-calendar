@@ -1,0 +1,18 @@
+# Azure Functions
+azure-functions==1.21.3
+
+# Azure Key Vault e autenticação
+azure-identity==1.18.0
+azure-keyvault-secrets==4.9.0
+
+# Google APIs
+google-api-python-client==2.124.0
+google-auth==2.32.0
+google-auth-oauthlib==1.2.0
+google-auth-httplib2==0.2.0
+
+# HTTP requests
+requests==2.32.3
+
+
+cryptography==42.0.5
