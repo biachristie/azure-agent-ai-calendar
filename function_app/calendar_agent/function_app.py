@@ -25,10 +25,13 @@ KV_SECRET_NAME = os.environ.get("KV_SECRET_NAME", "GOOGLE_OAUTH_TOKEN")
 KV_CREDENTIALS_NAME = os.environ.get("KV_CREDENTIALS_NAME", "GOOGLE_CREDENTIALS_JSON")
 KV_URI = os.environ.get("KEYVAULT_URI")
 
+TEMP_CREDENTIALS_PATH = "/tmp/credentials.json"
+
 
 def get_secret_client() -> SecretClient:
     if not KV_URI:
         raise Exception("KEYVAULT_URI environment variable is not set.")
+
     credential = DefaultAzureCredential()
     client = SecretClient(vault_url=KV_URI, credential=credential)
 
@@ -126,14 +129,14 @@ def handle_oauth2init(req: func.HttpRequest) -> func.HttpResponse:
 
     if not host:
         return func.HttpResponse("Cannot determine host for callback URL.", status_code=500)
-    
+
     credentials_json_str = read_secret_from_keyvault(KV_CREDENTIALS_NAME)
 
     if not credentials_json_str:
         return func.HttpResponse("FATAL: Google credentials JSON not found in Key Vault.", status_code=500)
 
     try:
-        with open("credentials.json", "w") as f:
+        with open(TEMP_CREDENTIALS_PATH, "w") as f:
             f.write(credentials_json_str)
     except Exception as e:
         logging.error(f"Failes to write credentials.json file: {e}")
@@ -141,7 +144,7 @@ def handle_oauth2init(req: func.HttpRequest) -> func.HttpResponse:
 
     callback = f"https://{host}/api/oauth2callback"
 
-    flow = Flow.from_client_secrets_file("credentials.json", scopes=SCOPES, redirect_uri=callback)
+    flow = Flow.from_client_secrets_file(TEMP_CREDENTIALS_PATH, scopes=SCOPES, redirect_uri=callback)
     auth_url, state = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
@@ -162,9 +165,16 @@ def handle_oauth2callback(req: func.HttpRequest) -> func.HttpResponse:
     if not credentials_json_str:
         return func.HttpResponse("FATAL: Failed to write credentials.json file.", status_code=500)
 
+    try:
+        with open(TEMP_CREDENTIALS_PATH, "w") as f:
+            f.write(credentials_json_str)
+    except Exception as e:
+        logging.error(f"Failed to write credentials.json file (callback): {e}")
+        return func.HttpResponse("FATAL: Failed to write credentials.json file.", status_code=500)
+
     callback = f"https://{host}/api/oauth2callback"
 
-    flow = Flow.from_client_secrets_file("credentials.json", scopes=SCOPES, redirect_uri=callback)
+    flow = Flow.from_client_secrets_file(TEMP_CREDENTIALS_PATH, scopes=SCOPES, redirect_uri=callback)
     flow.fetch_token(authorization_response=req.url)
     creds = flow.credentials
     token_json = creds.to_json()
