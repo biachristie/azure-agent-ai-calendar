@@ -2,7 +2,6 @@ import os
 import json
 import base64
 import logging
-import traceback
 from typing import Optional
 
 import azure.functions as func
@@ -23,6 +22,7 @@ SCOPES = [
 
 
 KV_SECRET_NAME = os.environ.get("KV_SECRET_NAME", "GOOGLE_OAUTH_TOKEN")
+KV_CREDENTIALS_NAME = os.environ.get("KV_CREDENTIALS_NAME", "GOOGLE_CREDENTIALS_JSON")
 KV_URI = os.environ.get("KEYVAULT_URI")
 
 
@@ -48,6 +48,17 @@ def read_token_from_keyvault() -> Optional[str]:
         return secret.value
     except Exception as e:
         logging.info(f"No token in Key Vault: {e}")
+        return None
+
+
+def read_secret_from_keyvault(secret_name: str) -> Optional[str]:
+    client = get_secret_client()
+
+    try:
+        secret = client.get_secret(secret_name)
+        return secret.value
+    except Exception as e:
+        logging.info(f"No secret '{secret_name} found in Key Vault: {e}")
         return None
 
 
@@ -115,11 +126,20 @@ def handle_oauth2init(req: func.HttpRequest) -> func.HttpResponse:
 
     if not host:
         return func.HttpResponse("Cannot determine host for callback URL.", status_code=500)
+    
+    credentials_json_str = read_secret_from_keyvault(KV_CREDENTIALS_NAME)
+
+    if not credentials_json_str:
+        return func.HttpResponse("FATAL: Google credentials JSON not found in Key Vault.", status_code=500)
+
+    try:
+        with open("credentials.json", "w") as f:
+            f.write(credentials_json_str)
+    except Exception as e:
+        logging.error(f"Failes to write credentials.json file: {e}")
+        return func.HttpResponse("FATAL: Failed to write credentials.json file.", stautus_code=500)
 
     callback = f"https://{host}/api/oauth2callback"
-
-    if not os.path.exists("credentials.json"):
-        return func.HttpResponse("credentials.json not found. Upload it to the function root", status_code=500)
 
     flow = Flow.from_client_secrets_file("credentials.json", scopes=SCOPES, redirect_uri=callback)
     auth_url, state = flow.authorization_url(
@@ -137,10 +157,12 @@ def handle_oauth2callback(req: func.HttpRequest) -> func.HttpResponse:
     if not host:
         return func.HttpResponse("Cannot determine host for callback URL.", status_code=500)
 
-    callback = f"https://{host}/api/oauth2callback"
+    credentials_json_str = read_secret_from_keyvault(KV_CREDENTIALS_NAME)
 
-    if not os.path.exists("credentials.json"):
-        return func.HttpResponse("credentials.json not found on server.", status_code=500)
+    if not credentials_json_str:
+        return func.HttpResponse("FATAL: Failed to write credentials.json file.", status_code=500)
+
+    callback = f"https://{host}/api/oauth2callback"
 
     flow = Flow.from_client_secrets_file("credentials.json", scopes=SCOPES, redirect_uri=callback)
     flow.fetch_token(authorization_response=req.url)
@@ -196,25 +218,20 @@ def handle_calendar_agent(req: func.HttpRequest) -> func.HttpResponse:
 
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
-    try:
-        action = req.route_params.get("action")
+    action = req.route_params.get("action")
 
-        if not action:
-            return func.HttpResponse("Use /api/oauth2init, /api/oauth2callback or /api/calendar_agent", status_code=400)
+    if not action:
+        return func.HttpResponse("Use /api/oauth2init, /api/oauth2callback or /api/calendar_agent", status_code=400)
 
-        action = action.lower()
+    action = action.lower()
 
-        if action == "oauth2init":
-            return handle_oauth2init(req)
+    if action == "oauth2init":
+        return handle_oauth2init(req)
 
-        if action == "oauth2callback":
-            return handle_oauth2callback(req)
+    if action == "oauth2callback":
+        return handle_oauth2callback(req)
 
-        if action in ("calendar_agent", "agenda", "schedule"):
-            return handle_calendar_agent(req)
+    if action in ("calendar_agent", "agenda", "schedule"):
+        return handle_calendar_agent(req)
 
-        return func.HttpResponse("Executado com sucesso.", status_code=200)
-    except Exception as e:
-        logging.error(traceback.format_exc())
-
-        return func.HttpResponse(f"Erro interno: {e}", status_code=500)
+    return func.HttpResponse("Successfully executed.", status_code=200)
