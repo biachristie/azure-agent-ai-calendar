@@ -60,8 +60,7 @@ def read_secret_from_keyvault(secret_name: str) -> Optional[str]:
     try:
         secret = client.get_secret(secret_name)
         return secret.value
-    except Exception as e:
-        logging.info(f"No secret '{secret_name} found in Key Vault: {e}")
+    except Exception:
         return None
 
 
@@ -70,8 +69,10 @@ def build_credentials_from_token(token_json: str) -> Credentials:
     creds = Credentials.from_authorized_user_info(info, scopes=SCOPES)
     request = tr_requests.Request()
 
-    if not creds.valid() and creds.refresh_token:
+    if not creds.valid and creds.refresh_token:
+        logging.info("Token expired, attempting refresh.")
         creds.refresh(request)
+
     return creds
 
 
