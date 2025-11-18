@@ -102,11 +102,11 @@ def create_event(calendar_service, summary: str, start_time_iso: str, end_time_i
         "summary": summary,
         "start": {
             "dateTime": start_time_iso,
-            "timeZone": "America/Sao Paulo"
+            "timeZone": "America/Sao_Paulo"
         },
         "end": {
             "dateTime": end_time_iso,
-            "timeZone": "America/Sao Paulo"
+            "timeZone": "America/Sao_Paulo"
         },
         "attendees": [{"email": e} for e in attendees],
         "reminders": {"useDefault": True}
