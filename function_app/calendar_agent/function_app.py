@@ -2,7 +2,6 @@ import os
 import json
 import base64
 import logging
-import traceback
 from typing import Optional
 
 import azure.functions as func
@@ -22,13 +21,17 @@ SCOPES = [
 ]
 
 
-KV_SECRET_NAME = os.environ.get("KV_SECRET_NAME", "GOOGLE_OAUTH_TOKEN")
+KV_SECRET_NAME = os.environ.get("KV_SECRET_NAME", "GOOGLE-OAUTH-TOKEN")
+KV_CREDENTIALS_NAME = os.environ.get("KV_CREDENTIALS_NAME", "GOOGLE-CREDENTIALS-JSON")
 KV_URI = os.environ.get("KEYVAULT_URI")
+
+TEMP_CREDENTIALS_PATH = "/tmp/credentials.json"
 
 
 def get_secret_client() -> SecretClient:
     if not KV_URI:
         raise Exception("KEYVAULT_URI environment variable is not set.")
+
     credential = DefaultAzureCredential()
     client = SecretClient(vault_url=KV_URI, credential=credential)
 
@@ -51,13 +54,25 @@ def read_token_from_keyvault() -> Optional[str]:
         return None
 
 
+def read_secret_from_keyvault(secret_name: str) -> Optional[str]:
+    client = get_secret_client()
+
+    try:
+        secret = client.get_secret(secret_name)
+        return secret.value
+    except Exception:
+        return None
+
+
 def build_credentials_from_token(token_json: str) -> Credentials:
     info = json.loads(token_json)
     creds = Credentials.from_authorized_user_info(info, scopes=SCOPES)
     request = tr_requests.Request()
 
-    if not creds.valid() and creds.refresh_token:
+    if not creds.valid and creds.refresh_token:
+        logging.info("Token expired, attempting refresh.")
         creds.refresh(request)
+
     return creds
 
 
@@ -87,11 +102,11 @@ def create_event(calendar_service, summary: str, start_time_iso: str, end_time_i
         "summary": summary,
         "start": {
             "dateTime": start_time_iso,
-            "timeZone": "America/Sao Paulo"
+            "timeZone": "America/Sao_Paulo"
         },
         "end": {
             "dateTime": end_time_iso,
-            "timeZone": "America/Sao Paulo"
+            "timeZone": "America/Sao_Paulo"
         },
         "attendees": [{"email": e} for e in attendees],
         "reminders": {"useDefault": True}
@@ -116,12 +131,21 @@ def handle_oauth2init(req: func.HttpRequest) -> func.HttpResponse:
     if not host:
         return func.HttpResponse("Cannot determine host for callback URL.", status_code=500)
 
+    credentials_json_str = read_secret_from_keyvault(KV_CREDENTIALS_NAME)
+
+    if not credentials_json_str:
+        return func.HttpResponse("FATAL: Google credentials JSON not found in Key Vault.", status_code=500)
+
+    try:
+        with open(TEMP_CREDENTIALS_PATH, "w") as f:
+            f.write(credentials_json_str)
+    except Exception as e:
+        logging.error(f"Failes to write credentials.json file: {e}")
+        return func.HttpResponse("FATAL: Failed to write credentials.json file.", status_code=500)
+
     callback = f"https://{host}/api/oauth2callback"
 
-    if not os.path.exists("credentials.json"):
-        return func.HttpResponse("credentials.json not found. Upload it to the function root", status_code=500)
-
-    flow = Flow.from_client_secrets_file("credentials.json", scopes=SCOPES, redirect_uri=callback)
+    flow = Flow.from_client_secrets_file(TEMP_CREDENTIALS_PATH, scopes=SCOPES, redirect_uri=callback)
     auth_url, state = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
@@ -137,12 +161,21 @@ def handle_oauth2callback(req: func.HttpRequest) -> func.HttpResponse:
     if not host:
         return func.HttpResponse("Cannot determine host for callback URL.", status_code=500)
 
+    credentials_json_str = read_secret_from_keyvault(KV_CREDENTIALS_NAME)
+
+    if not credentials_json_str:
+        return func.HttpResponse("FATAL: Failed to write credentials.json file.", status_code=500)
+
+    try:
+        with open(TEMP_CREDENTIALS_PATH, "w") as f:
+            f.write(credentials_json_str)
+    except Exception as e:
+        logging.error(f"Failed to write credentials.json file (callback): {e}")
+        return func.HttpResponse("FATAL: Failed to write credentials.json file.", status_code=500)
+
     callback = f"https://{host}/api/oauth2callback"
 
-    if not os.path.exists("credentials.json"):
-        return func.HttpResponse("credentials.json not found on server.", status_code=500)
-
-    flow = Flow.from_client_secrets_file("credentials.json", scopes=SCOPES, redirect_uri=callback)
+    flow = Flow.from_client_secrets_file(TEMP_CREDENTIALS_PATH, scopes=SCOPES, redirect_uri=callback)
     flow.fetch_token(authorization_response=req.url)
     creds = flow.credentials
     token_json = creds.to_json()
@@ -196,25 +229,20 @@ def handle_calendar_agent(req: func.HttpRequest) -> func.HttpResponse:
 
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
-    try:
-        action = req.route_params.get("action")
+    action = req.route_params.get("action")
 
-        if not action:
-            return func.HttpResponse("Use /api/oauth2init, /api/oauth2callback or /api/calendar_agent", status_code=400)
+    if not action:
+        return func.HttpResponse("Use /api/oauth2init, /api/oauth2callback or /api/calendar_agent", status_code=400)
 
-        action = action.lower()
+    action = action.lower()
 
-        if action == "oauth2init":
-            return handle_oauth2init(req)
+    if action == "oauth2init":
+        return handle_oauth2init(req)
 
-        if action == "oauth2callback":
-            return handle_oauth2callback(req)
+    if action == "oauth2callback":
+        return handle_oauth2callback(req)
 
-        if action in ("calendar_agent", "agenda", "schedule"):
-            return handle_calendar_agent(req)
+    if action in ("calendar_agent", "agenda", "schedule"):
+        return handle_calendar_agent(req)
 
-        return func.HttpResponse("Executado com sucesso.", status_code=200)
-    except Exception as e:
-        logging.error(traceback.format_exc())
-
-        return func.HttpResponse(f"Erro interno: {e}", status_code=500)
+    return func.HttpResponse("Successfully executed.", status_code=200)
