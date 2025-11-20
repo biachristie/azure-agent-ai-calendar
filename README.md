@@ -263,11 +263,13 @@ A aplicação precisa saber onde está o Cofre de Chaves.
 4. **Ações**:
     * Selecione "Aplicativos Lógicos do Azure".
     * Escolha a ação "Call external HTTP or HTTPS endpoints".
-    <img src="./images/11.png" alt="Captura de tela Ação do Agente" width="800" >
+       <img src="./images/11.png" alt="Captura de tela Ação do Agente" width="800" >
+    
     * **Nome da Ação**: Nomeie a ação do agente (ex: `smartcalendar_agent`).
     * **Descrição da Ação**: Adicione uma breve descrição.
     * **Resource Group**: Selecione o grupo de recursos do Azure.  
-    <img src="./images/12.png" alt="Captura de tela Descrição da Ação" width="800" >
+       <img src="./images/12.png" alt="Captura de tela Descrição da Ação" width="800" >
+    
     * Selecione POST em **HTTP Method for the endpoint**.
     * Confirme a conexão a um Serviço de Aplicativos Lógicos do Azure.
     * Descreva como invocar a ferramenta (ex: "Chame esta ferramenta enviando HTTP_URI com a URL da Function e HTTP_request_content com o JSON do agendamento (summary, start, end, attendees).")
