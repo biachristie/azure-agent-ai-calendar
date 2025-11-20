@@ -1,0 +1,61 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "smartcalendar_agent",
+        "version": "1.0.0",
+        "description": "Ação para chamar a Azure Function que agenda reuniões no Google Calendar."
+    },
+    "servers": [
+        {
+            "url": "INSIRA O DOMÍNIO DA SUA FUNÇÃO"
+        }
+    ],
+    "paths": {
+        "/api/calendar_agent": {
+            "post": {
+                "operationId": "calendar_agent",
+                "summary": "Agenda reunião via Azure Function",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "summary": {
+                                        "type": "string"
+                                    },
+                                    "start": {
+                                        "type": "string",
+                                        "format": "date-time"
+                                    },
+                                    "end": {
+                                        "type": "string",
+                                        "format": "date-time"
+                                    },
+                                    "attendees": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "format": "email"
+                                        }
+                                    }
+                                },
+                                "required": [
+                                    "summary",
+                                    "start",
+                                    "end"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Resposta da Azure Function"
+                    }
+                }
+            }
+        }
+    }
+}
