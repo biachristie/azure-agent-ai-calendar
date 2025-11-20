@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.python_packages
+.pytest_cache
+.coverage
+
+# VSCode
+.vscode
+.history/
+
+# Azure Functions local settings
+local.settings.json
+
+# Google OAuth credentials
+credentials.json
+token.json
+client_secret*.json
+
+#Azure Tooling
+.azure
+.app_resources.json
+
+# Build artifacts
+bin/
+obj/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Virtual environments
+env/
+venv/
+.venv/
